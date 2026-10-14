@@ -1,7 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode, type InputHTMLAttributes } from "react";
+import React, {
+  useState,
+  type ReactNode,
+  type InputHTMLAttributes
+} from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -23,7 +27,45 @@ function Frame({ icon, title, description, children }: {icon:ReactNode; title:st
   return <div className="mx-auto max-w-md py-3 md:py-8"><div className="rounded-3xl border border-ink-700 bg-ink-900 p-6 shadow-xl shadow-black/20 sm:p-8"><div className="mb-5 inline-flex rounded-2xl bg-lime-400/10 p-3 text-lime-400">{icon}</div><h1 className="text-3xl font-bold tracking-tight">{title}</h1><p className="mt-2 mb-7 text-sm leading-relaxed text-mist-300">{description}</p>{children}</div></div>;
 }
 function Feedback({ error, success }: {error:string;success:string}) { return <>{error && <p role="alert" className="my-3 rounded-lg border border-red-800 bg-red-950/50 p-3 text-sm text-red-200">{error}</p>}{success && <p role="status" className="my-3 rounded-lg border border-lime-600/30 bg-lime-400/10 p-3 text-sm text-lime-400">{success}</p>}</>; }
-function Field({label,id,error, ...inputProps}:{label:string;id:string;error?:string}&InputHTMLAttributes<HTMLInputElement>){return <div><label htmlFor={id} className="mb-1.5 block text-sm font-medium">{label}</label><input id={id} className={inputStyle} aria-invalid={Boolean(error)} aria-describedby={error?`${id}-error`:undefined} {...inputProps}/>{error && <p id={`${id}-error`} role="alert" className="mt-1 text-xs text-red-300">{error}</p>}</div>;}
+const Field = React.forwardRef<HTMLInputElement, {
+  label: string;
+  id: string;
+  error?: string;
+} & InputHTMLAttributes<HTMLInputElement>>(
+({ label, id, error, ...inputProps }, ref) => {
+
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="mb-1.5 block text-sm font-medium"
+      >
+        {label}
+      </label>
+
+      <input
+        ref={ref}
+        id={id}
+        className={inputStyle}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
+        {...inputProps}
+      />
+
+      {error && (
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="mt-1 text-xs text-red-300"
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+});
+
+Field.displayName = "Field";
 
 export function LoginForm() {
   const { configured } = useAuth(); const router=useRouter();
