@@ -1,6 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
+import { UserMenu } from "@/components/user-menu";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -16,7 +17,7 @@ export function TopBar() {
 
   return (
     <header className="sticky top-0 z-10 border-b border-ink-700 bg-ink-950/90 px-4 py-3 backdrop-blur md:px-8">
-      <form onSubmit={onSubmit} role="search" className="relative max-w-xl">
+      <div className="flex items-center gap-3"><form onSubmit={onSubmit} role="search" className="relative min-w-0 flex-1 max-w-xl">
         <label htmlFor="global-search" className="sr-only">
           Tìm bài hát, nghệ sĩ hoặc album
         </label>
@@ -28,7 +29,7 @@ export function TopBar() {
           placeholder="Tìm bài hát, nghệ sĩ hoặc album"
           className="w-full rounded-full border border-ink-700 bg-ink-800 py-2 pl-9 pr-4 text-sm placeholder:text-mist-300 focus:border-lime-500"
         />
-      </form>
+      </form><div className="ml-auto"><UserMenu /></div></div>
     </header>
   );
 }
