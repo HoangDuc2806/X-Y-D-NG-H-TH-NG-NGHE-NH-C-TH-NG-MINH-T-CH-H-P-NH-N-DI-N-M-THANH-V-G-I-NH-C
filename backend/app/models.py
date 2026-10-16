@@ -42,6 +42,28 @@ class PlaylistItem(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+
+class PlaylistTrack(Base):
+    """Bảng playlist_tracks của Phase 3; quyền sở hữu được kiểm tra qua RLS của playlist."""
+    __tablename__ = "playlist_tracks"
+    __table_args__ = (
+        CheckConstraint("position IS NULL OR position >= 0"),
+        {"schema": "public"},
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    playlist_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("public.playlists.id", ondelete="CASCADE"), nullable=False
+    )
+    track_id: Mapped[str] = mapped_column(Text, nullable=False)
+    track_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    artist_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    album_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cover_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    spotify_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Favorite(Base):
     __tablename__ = "favorites"
     __table_args__ = (UniqueConstraint("user_id", "provider", "track_id"), {"schema": "public"})

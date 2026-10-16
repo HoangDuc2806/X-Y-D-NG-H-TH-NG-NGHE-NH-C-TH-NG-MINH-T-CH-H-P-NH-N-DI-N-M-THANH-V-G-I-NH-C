@@ -172,3 +172,21 @@ music-discovery-vn/
 ## Lộ trình tiếp
 
 **Giai đoạn 3:** danh mục nhạc có quyền phát hợp pháp, upload qua quyền người dùng (không mặc định ghi âm tự động), HTML5 Audio, ghi lịch sử nghe thực và thêm bài vào playlist/yêu thích.
+
+
+## GIAI ĐOẠN 3.2 — Backend Music Data API
+
+Đã hoàn thành lớp API dữ liệu cá nhân trên FastAPI:
+- `/api/profile`: đọc/cập nhật hồ sơ.
+- `/api/favorites`: đọc, thêm/upsert, xóa yêu thích.
+- `/api/playlists`: đọc, tạo, cập nhật, xóa playlist.
+- `/api/playlists/{playlist_id}/tracks`: CRUD bài trong bảng `playlist_tracks`.
+- `/api/playlists/{playlist_id}/items`: API tương thích cho bảng `playlist_items` của Phase 2.
+- `/api/listening-history`: đọc, ghi, xóa lịch sử nghe.
+- Bearer token được Supabase Auth xác minh trước khi xử lý.
+- PostgREST được gọi bằng publishable key + access token của user để RLS tiếp tục có hiệu lực.
+- Không dùng service-role key cho request người dùng và không dùng `DATABASE_URL` trong API.
+- Request body không được phép tự gửi `user_id`.
+- Test backend: **24 tests pass**.
+
+Lưu ý: database hiện có cả `playlist_items` và `playlist_tracks`; Phase 3.2 không tự ý merge/xóa một trong hai và không đồng bộ hai bảng.

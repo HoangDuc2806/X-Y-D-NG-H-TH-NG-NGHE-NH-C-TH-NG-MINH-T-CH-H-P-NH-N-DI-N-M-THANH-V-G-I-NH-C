@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import setup_logging
-from app.routers import health, account
+from app.routers import health, account, profile, favorites, playlists, playlist_tracks, playlist_items, history
 
 
 def create_app() -> FastAPI:
@@ -20,6 +20,12 @@ def create_app() -> FastAPI:
     register_error_handlers(app)
     app.include_router(health.router)
     app.include_router(account.router)
+    app.include_router(profile.router)
+    app.include_router(favorites.router)
+    app.include_router(playlists.router)
+    app.include_router(playlist_tracks.router)
+    app.include_router(playlist_items.router)
+    app.include_router(history.router)
     return app
 
 
