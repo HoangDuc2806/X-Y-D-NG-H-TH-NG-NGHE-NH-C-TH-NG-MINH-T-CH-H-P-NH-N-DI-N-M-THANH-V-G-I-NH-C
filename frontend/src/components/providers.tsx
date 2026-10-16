@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabase";
+import { SpotifyPlayerProvider } from "@/components/spotify-player-provider";
 
 type AuthContextValue = { user: User | null; loading: boolean; configured: boolean };
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -47,7 +48,7 @@ function AuthProvider({ children, queryClient }: { children: ReactNode; queryCli
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1 } } }));
-  return <QueryClientProvider client={queryClient}><AuthProvider queryClient={queryClient}>{children}</AuthProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><SpotifyPlayerProvider><AuthProvider queryClient={queryClient}>{children}</AuthProvider></SpotifyPlayerProvider></QueryClientProvider>;
 }
 
 export function useAuth() {

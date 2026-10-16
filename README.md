@@ -101,7 +101,7 @@ cd backend
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-copy .env.example .env
+copy .env.example .env.local
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
@@ -187,6 +187,99 @@ music-discovery-vn/
 - PostgREST được gọi bằng publishable key + access token của user để RLS tiếp tục có hiệu lực.
 - Không dùng service-role key cho request người dùng và không dùng `DATABASE_URL` trong API.
 - Request body không được phép tự gửi `user_id`.
-- Test backend: **24 tests pass**.
+- Xử lý bài hát yêu thích trùng bằng `resolution=ignore-duplicates`, không yêu cầu cấp quyền UPDATE RLS chỉ để xử lý upsert.
+- Test backend hiện tại: **32 tests pass** trong môi trường kiểm thử; các dịch vụ Supabase/AcoustID được mock khi test.
 
 Lưu ý: database hiện có cả `playlist_items` và `playlist_tracks`; Phase 3.2 không tự ý merge/xóa một trong hai và không đồng bộ hai bảng.
+
+## GIAI ĐOẠN NHẬN DIỆN ÂM NHẠC — Chromaprint + AcoustID
+
+Đã bổ sung luồng nhận diện âm thanh thực tế theo kiến trúc sau:
+
+1. Người dùng đã đăng nhập, chủ động ghi âm tối đa 15 giây bằng micro hoặc tải tệp âm thanh lên trang `/identify`.
+2. Frontend gửi tệp qua `POST /api/identify` kèm Bearer access token của phiên Supabase.
+3. FastAPI xác thực phiên, kiểm tra định dạng/kích thước, ghi tệp vào thư mục tạm của hệ điều hành và chạy `fpcalc` để tạo dấu vân tay Chromaprint.
+4. Backend gửi **dấu vân tay và thời lượng**, không gửi tệp âm thanh, tới AcoustID để tra cứu metadata MusicBrainz.
+5. Backend trả về tên bài hát, nghệ sĩ, album/năm nếu có, điểm khớp và liên kết tham khảo. Tệp tạm được xóa khi xử lý xong; không có dữ liệu kết quả giả.
+
+### Cấu hình nhận diện trên Windows
+
+1. Đăng ký ứng dụng AcoustID tại <https://acoustid.org/new-application> để lấy `client key`. Dịch vụ web AcoustID miễn phí chỉ dành cho mục đích phi thương mại và yêu cầu giới hạn tần suất; xem <https://acoustid.org/webservice>.
+2. Cài Chromaprint CLI và xác nhận lệnh `fpcalc` chạy được trong Terminal. Nếu chưa có trong `PATH`, lấy đường dẫn đầy đủ tới `fpcalc.exe`. Với tệp ghi âm WebM, cần dùng bản `fpcalc` có hỗ trợ giải mã định dạng đó; nếu không, hãy thử tải WAV/MP3.
+3. Mở `backend/.env.local` và thêm các biến sau (không đưa client key vào frontend):
+
+```dotenv
+ACOUSTID_CLIENT_KEY=YOUR_ACOUSTID_CLIENT_KEY
+CHROMAPRINT_FPCALC_PATH=fpcalc
+RECOGNITION_MAX_UPLOAD_BYTES=20971520
+RECOGNITION_FINGERPRINT_LENGTH_SECONDS=120
+RECOGNITION_MIN_DURATION_SECONDS=5
+RECOGNITION_MAX_DURATION_SECONDS=1800
+```
+
+Nếu `fpcalc.exe` chưa có trong `PATH`, đặt `CHROMAPRINT_FPCALC_PATH` thành đường dẫn đầy đủ, ví dụ `C:\tools\chromaprint\fpcalc.exe`. Khởi động lại FastAPI sau khi sửa cấu hình. Backend đọc `.env.local`, vì vậy hãy tạo file này từ `.env.example` nếu chưa có.
+
+### Kiểm thử và giới hạn
+
+- Backend: `python -m pytest -q` — **32 tests pass** tại thời điểm cập nhật tài liệu. Các test nhận diện dùng dữ liệu dịch vụ giả lập có kiểm soát để không phụ thuộc Internet hoặc API key.
+- Frontend: `npm run typecheck` — **pass**. `npm run build` chưa xác minh được trong môi trường đóng gói này do thiếu gói SWC Linux và không thể tải gói từ npm registry; hãy chạy build trên máy phát triển Windows của dự án.
+- API nhận diện yêu cầu đăng nhập; tệp tối đa 20 MB theo mặc định, tối thiểu 5 giây và tối đa 30 phút. Dấu vân tay chỉ lấy tối đa 120 giây đầu để giới hạn thời gian xử lý.
+- AcoustID không bảo đảm tìm được mọi bài hát, đặc biệt với đoạn thu micro ngắn/nhiễu hoặc bản nhạc chưa có trong cơ sở dữ liệu. Điểm khớp là điểm của dịch vụ, không phải xác suất chắc chắn.
+- Chức năng này chỉ nhận diện metadata, **không tải nhạc, không phát nhạc Spotify và không tự lưu lịch sử nghe**. Các chức năng đó cần được triển khai riêng với nguồn nhạc có quyền sử dụng hợp pháp.
+
+
+## Spotify Web Playback SDK — phát nhạc trực tiếp trong website
+
+Trang `/search` vẫn dùng Spotify Web API để tìm metadata bài hát. Phần nghe nhạc dùng **Spotify Web Playback SDK** và quyền OAuth của chính người nghe; website không tải hoặc lưu file nhạc Spotify. Người dùng phải kết nối tài khoản Spotify của mình, và Web Playback SDK yêu cầu Spotify Premium.
+
+### Cấu hình Spotify Developer Dashboard
+
+1. Tạo ứng dụng tại <https://developer.spotify.com/dashboard> và sao chép **Client ID**.
+2. Trong app settings, thêm Redirect URI chính xác: `http://127.0.0.1:3000/spotify/callback`.
+3. Trong Development Mode, thêm email tài khoản Spotify của bạn vào danh sách người dùng được phép. Tài khoản chủ ứng dụng cần Premium; Development Mode hiện giới hạn tối đa 5 người dùng được ủy quyền.
+4. Nếu chạy dự án cho mục đích học tập/demo, không dùng SDK như dịch vụ streaming thương mại; cần tuân thủ Spotify Developer Policy và các giới hạn nền tảng.
+
+### Cấu hình frontend
+
+Thêm vào `frontend/.env.local` (Client ID là giá trị public; **không** đặt Client Secret ở frontend):
+
+```dotenv
+NEXT_PUBLIC_SPOTIFY_CLIENT_ID=YOUR_SPOTIFY_CLIENT_ID
+NEXT_PUBLIC_SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/spotify/callback
+```
+
+Để callback OAuth dùng cùng origin, hãy mở website tại `http://127.0.0.1:3000` sau khi kết nối Spotify. Trong Supabase **Authentication → URL Configuration → Redirect URLs**, thêm `http://127.0.0.1:3000/**` để đăng nhập Supabase tiếp tục hoạt động trên địa chỉ này.
+
+### Cấu hình backend
+
+Giữ Client Secret ở `backend/.env.local`:
+
+```dotenv
+SPOTIFY_CLIENT_ID=YOUR_SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET=YOUR_SPOTIFY_CLIENT_SECRET
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
+
+Nếu `backend/.env.local` đã có `CORS_ORIGINS`, sửa dòng đó để bao gồm cả hai địa chỉ trên rồi khởi động lại FastAPI. Backend sử dụng Client Credentials để tìm bài hát; luồng phát nhạc dùng Authorization Code with PKCE từ trình duyệt, không sử dụng Client Secret ở frontend.
+
+### Cách thử
+
+1. Chạy backend và frontend như bình thường.
+2. Mở `http://127.0.0.1:3000`, nhấn **Kết nối Spotify** và cấp quyền.
+3. Tìm một bài hát trên trang **Tìm kiếm** rồi chọn **Phát trên website**. Thanh phát nhạc dưới cùng sẽ hiển thị bài hiện tại và hỗ trợ phát/tạm dừng, bài trước/sau và âm lượng.
+4. Ở trang **Nhận diện**, chọn **Tìm bài này trên Spotify** để tìm bản Spotify của bài vừa nhận diện, sau đó phát từ kết quả tìm kiếm.
+
+Nếu Spotify trả 403, kiểm tra app đang ở Development Mode, tài khoản đã được thêm allowlist, Premium còn hiệu lực và các quyền đã được cấp. Người khác không thể dùng Premium của bạn: mỗi người nghe cần tự kết nối tài khoản Spotify của họ và phải được cho phép trong Development Mode.
+
+### Lưu ý quan trọng
+
+- Access token và refresh token được lưu trong `sessionStorage` của tab trình duyệt và có thể cần kết nối lại khi phiên hết hạn hoặc tab bị đóng.
+- Phát nhạc yêu cầu tài khoản Spotify Premium của người đang kết nối, trình duyệt hỗ trợ Encrypted Media Extensions và quyền phát của Spotify.
+- Spotify Developer Mode phù hợp cho phát triển cá nhân/phi thương mại; không nên coi đó là cách triển khai cho lượng người dùng công khai lớn. Spotify hiện nêu giới hạn 5 người dùng được ủy quyền trong Development Mode.
+- Không sử dụng Spotify audio/metadata để huấn luyện mô hình AI. Chức năng nhận diện hiện tại lấy fingerprint từ âm thanh do người dùng ghi/tải lên, rồi tìm metadata Spotify riêng biệt.
+
+Tài liệu chính thức:
+- Web Playback SDK: <https://developer.spotify.com/documentation/web-playback-sdk>
+- Authorization Code with PKCE: <https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow>
+- Redirect URI: <https://developer.spotify.com/documentation/web-api/concepts/redirect_uri>
+- Development Mode / quota modes: <https://developer.spotify.com/documentation/web-api/concepts/quota-modes>
