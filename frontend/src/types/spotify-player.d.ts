@@ -23,6 +23,7 @@ declare global {
     addListener(eventName: string, callback: (payload: any) => void): boolean;
     removeListener(eventName: string, callback?: (payload: any) => void): boolean;
     getCurrentState(): Promise<SpotifySdkPlaybackState | null>;
+    seek(positionMs: number): Promise<void>;
     activateElement(): Promise<void>;
     pause(): Promise<void>;
     resume(): Promise<void>;
