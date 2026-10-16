@@ -8,10 +8,14 @@ declare global {
     duration_ms: number;
     artists: Array<{ name: string; uri?: string }>;
     album: { name: string; images?: Array<{ url: string }> };
+    /** Có khi Spotify "relink" bài hát theo thị trường; id gốc nằm ở đây. */
+    linked_from?: { uri?: string | null; id?: string | null };
   }
 
   interface SpotifySdkPlaybackState {
     paused: boolean;
+    /** true khi trình phát đang tải bài (chưa thực sự phát). */
+    loading?: boolean;
     position: number;
     duration: number;
     track_window: { current_track: SpotifySdkTrack };

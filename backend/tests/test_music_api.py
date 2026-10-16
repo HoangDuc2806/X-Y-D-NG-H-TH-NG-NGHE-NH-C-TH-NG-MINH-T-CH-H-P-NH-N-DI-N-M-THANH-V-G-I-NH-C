@@ -21,8 +21,8 @@ class FakeSupabase:
         self.calls = calls
         self.responses = responses or {}
 
-    async def select(self, table, *, select, filters=None, order=None, limit=None):
-        self.calls.append(("select", table, select, filters, order, limit))
+    async def select(self, table, *, select, filters=None, order=None, limit=None, offset=None):
+        self.calls.append(("select", table, select, filters, order, limit, offset))
         return self.responses.get(("select", table), [])
 
     async def insert(self, table, payload, *, select, prefer="return=representation", params=None):
@@ -188,6 +188,7 @@ def test_playlist_create_injects_current_user_id():
 def test_playlist_track_create_uses_path_playlist_and_no_user_id():
     calls = []
     fake = FakeSupabase(calls, {
+        ("select", "playlists"): [{"id": str(PLAYLIST_ID)}],  # backend kiểm tra quyền sở hữu trước
         ("insert", "playlist_tracks"): [{
             "id": str(ROW_ID),
             "playlist_id": str(PLAYLIST_ID),
@@ -207,7 +208,7 @@ def test_playlist_track_create_uses_path_playlist_and_no_user_id():
         json={"track_id": "licensed-1", "track_name": "Bài 1", "position": 0},
     )
     assert response.status_code == 201
-    payload = calls[0][2]
+    payload = next(c for c in calls if c[0] == "insert")[2]
     assert payload["playlist_id"] == str(PLAYLIST_ID)
     assert "user_id" not in payload
 
@@ -252,7 +253,7 @@ def test_history_create_injects_current_user_id():
         json={"provider": "licensed", "track_id": "licensed-1", "listened_seconds": 31},
     )
     assert response.status_code == 201
-    assert calls[0][2]["user_id"] == str(USER_ID)
+    assert next(c for c in calls if c[0] == "insert")[2]["user_id"] == str(USER_ID)
 
 
 def test_delete_returns_404_when_rls_hides_row():

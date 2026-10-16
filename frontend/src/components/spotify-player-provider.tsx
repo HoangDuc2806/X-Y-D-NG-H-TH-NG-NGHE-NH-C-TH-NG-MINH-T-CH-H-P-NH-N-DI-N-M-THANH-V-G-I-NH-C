@@ -11,7 +11,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { SpotifyTrack } from "@/lib/api";
+import { hasSession, metaFromSdkTrack, recordHistory } from "@/lib/library-api";
+import { emptySession, nextListenStep, spotifyTrackIdFromUri, type ListenSession } from "@/lib/listen-tracker";
 import {
   clearSpotifyAuthorization,
   getValidSpotifyAccessToken,
@@ -123,6 +126,8 @@ export function SpotifyPlayerProvider({
 }) {
   const playerRef = useRef<SpotifySdkPlayer | null>(null);
   const deviceIdRef = useRef<string | null>(null);
+  const queryClient = useQueryClient();
+  const listenSessionRef = useRef<ListenSession>(emptySession());
 
   const [authChecked, setAuthChecked] = useState(false);
   const [authorized, setAuthorized] = useState(false);
@@ -134,6 +139,39 @@ export function SpotifyPlayerProvider({
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.5);
   const [error, setError] = useState("");
+
+  // Ghi lịch sử nghe khi Spotify xác nhận bài hát THỰC SỰ đang phát (xem lib/listen-tracker.ts).
+  // Lỗi ghi lịch sử chỉ được log; không bao giờ ảnh hưởng đến trình phát.
+  const trackListen = useCallback(
+    (state: SpotifySdkPlaybackState | null) => {
+      const track = state?.track_window?.current_track;
+      const uriId = spotifyTrackIdFromUri(track?.uri);
+      const linkedId = track?.linked_from?.id ?? spotifyTrackIdFromUri(track?.linked_from?.uri);
+      const key = uriId ? (linkedId ?? uriId) : null; // chỉ bài hát (không phải podcast/local)
+
+      const step = nextListenStep(listenSessionRef.current, {
+        key,
+        paused: state?.paused ?? true,
+        loading: Boolean(state?.loading),
+        position: state?.position ?? 0,
+      });
+      listenSessionRef.current = step.session;
+      if (!step.shouldRecord || !key || !track) return;
+
+      void (async () => {
+        try {
+          if (!(await hasSession())) return; // chưa đăng nhập: không có gì để ghi
+          await recordHistory({ provider: "spotify", track_id: key, ...metaFromSdkTrack(track, key) });
+          void queryClient.invalidateQueries({ queryKey: ["history"] });
+        } catch (caught) {
+          console.warn("Không ghi được lịch sử nghe:", caught instanceof Error ? caught.message : caught);
+        }
+      })();
+    },
+    [queryClient],
+  );
+  const trackListenRef = useRef(trackListen);
+  trackListenRef.current = trackListen;
 
   const syncAuthorization = useCallback(async () => {
     try {
@@ -248,6 +286,7 @@ export function SpotifyPlayerProvider({
             setPaused(state?.paused ?? true);
             setPosition(state?.position ?? 0);
             setDuration(state?.duration ?? 0);
+            trackListenRef.current(state);
           }
         );
 
@@ -321,6 +360,7 @@ export function SpotifyPlayerProvider({
       }
 
       deviceIdRef.current = null;
+      listenSessionRef.current = emptySession();
       setReady(false);
     };
 
@@ -383,6 +423,7 @@ export function SpotifyPlayerProvider({
     deviceIdRef.current = null;
 
     clearSpotifyAuthorization();
+    listenSessionRef.current = emptySession();
 
     setAuthorized(false);
     setReady(false);

@@ -1,43 +1,19 @@
 "use client";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Disc3, Heart, History, ListMusic, PencilLine, Plus, Trash2 } from "lucide-react";
+
 import { PageHeader } from "@/components/page-header";
 import { AuthGate } from "@/components/auth-gate";
-import { useAuth } from "@/components/providers";
-import {createPlaylist,deletePlaylist,listFavorites,listListeningHistory,listPlaylists,removeFavorite,renamePlaylist} from "@/lib/data";
+import { LibraryContent } from "@/components/library/library-content";
 
-const playlistSchema=z.object({ name:z.string().trim().min(1,"Tên playlist không được để trống.").max(100,"Tên playlist tối đa 100 ký tự.") });
-type PlaylistFields=z.infer<typeof playlistSchema>;
-type Tab="playlists"|"favorites"|"history";
-const panel="rounded-2xl border border-ink-700 bg-ink-900 p-5 sm:p-6";
-
-function LibraryContent(){
- const {user}=useAuth(); const queryClient=useQueryClient(); const [tab,setTab]=useState<Tab>("playlists");const [error,setError]=useState("");const [message,setMessage]=useState("");const [editing,setEditing]=useState<string|null>(null);const [editName,setEditName]=useState("");const [busy,setBusy]=useState(false);
- const uid=user?.id;
- const playlists=useQuery({queryKey:["playlists",uid],queryFn:()=>listPlaylists(uid!),enabled:Boolean(uid)});
- const favorites=useQuery({queryKey:["favorites",uid],queryFn:()=>listFavorites(uid!),enabled:Boolean(uid)});
- const history=useQuery({queryKey:["history",uid],queryFn:()=>listListeningHistory(uid!),enabled:Boolean(uid)});
- const {register,handleSubmit,reset,formState:{errors,isSubmitting}}=useForm<PlaylistFields>({resolver:zodResolver(playlistSchema)});
- if(!user) return null;
- const tabs:[Tab,string,number|undefined][]=[["playlists","Playlist",playlists.data?.length],["favorites","Yêu thích",favorites.data?.length],["history","Đã nghe",history.data?.length]];
- async function mutation(run:()=>Promise<void>,target:Tab):Promise<boolean>{setBusy(true);setError("");setMessage("");try{await run();await queryClient.invalidateQueries({queryKey:[target,uid]});setMessage("Đã cập nhật dữ liệu trên Supabase.");return true;}catch(e){setError(e instanceof Error?e.message:"Không cập nhật được dữ liệu.");return false;}finally{setBusy(false);}}
- async function onCreate(values:PlaylistFields){const success=await mutation(()=>createPlaylist(user!.id,values.name),"playlists");if(success)reset({name:""});}
- async function onRename(id:string){const parsed=playlistSchema.safeParse({name:editName});if(!parsed.success){setError(parsed.error.issues[0]?.message??"Tên không hợp lệ.");return;}const success=await mutation(()=>renamePlaylist(id,parsed.data.name),"playlists");if(success)setEditing(null);}
- async function onDelete(id:string){if(!window.confirm("Xóa playlist này? Các mục trong playlist cũng sẽ bị xóa."))return;await mutation(()=>deletePlaylist(id),"playlists");}
- return <div className="space-y-5">
-   <div className="flex flex-wrap gap-2" role="tablist" aria-label="Thư viện của bạn">{tabs.map(([id,label,count])=><button key={id} type="button" role="tab" aria-selected={tab===id} onClick={()=>{setTab(id);setError("");setMessage("");}} className={`rounded-full border px-4 py-2 text-sm transition ${tab===id?"border-lime-400 bg-lime-400 text-ink-950 font-semibold":"border-ink-700 bg-ink-900 hover:border-lime-500"}`}>{label}{count!==undefined?` (${count})`:""}</button>)}</div>
-   {error && <p role="alert" className="rounded-xl border border-red-800/60 bg-red-950/30 p-3 text-sm text-red-300">{error}</p>}{message && <p role="status" className="text-sm text-lime-400">{message}</p>}
-   {tab==="playlists" && <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-     <section className={panel}><h2 className="flex items-center gap-2 text-xl font-bold"><Plus size={20} className="text-lime-400"/> Tạo playlist</h2><p className="mt-2 mb-5 text-sm text-mist-300">Tạo một danh sách thật trong cơ sở dữ liệu. Giai đoạn tích hợp nhạc sẽ cho phép thêm bài hát vào đây.</p><form onSubmit={handleSubmit(onCreate)} className="space-y-3"><label htmlFor="playlist-name" className="text-sm font-medium">Tên playlist</label><input id="playlist-name" placeholder="Ví dụ: Nhạc khi học bài" maxLength={100} {...register("name")} className="w-full rounded-xl border border-ink-700 bg-ink-950 px-4 py-3 text-sm focus:border-lime-400 focus:outline-none"/>{errors.name && <p role="alert" className="text-sm text-red-300">{errors.name.message}</p>}<button type="submit" disabled={isSubmitting||busy} className="rounded-xl bg-lime-400 px-5 py-2.5 text-sm font-semibold text-ink-950 disabled:opacity-60">{isSubmitting||busy?"Đang tạo…":"Tạo playlist"}</button></form></section>
-     <section className={panel}><h2 className="mb-4 flex items-center gap-2 text-xl font-bold"><ListMusic size={20} className="text-lime-400"/> Playlist của bạn</h2>{playlists.isLoading && <p role="status" className="text-sm text-mist-300">Đang tải playlist…</p>}{playlists.isError && <p role="alert" className="text-sm text-red-300">{playlists.error.message}</p>}{playlists.data?.length===0 && <p className="rounded-xl border border-dashed border-ink-700 p-6 text-sm text-mist-300">Bạn chưa tạo playlist nào.</p>}
-       <ul className="space-y-3">{playlists.data?.map(item=><li key={item.id} className="rounded-xl border border-ink-700 bg-ink-950 p-4">{editing===item.id?<div className="flex gap-2"><input value={editName} maxLength={100} aria-label="Tên playlist mới" onChange={e=>setEditName(e.target.value)} className="min-w-0 flex-1 rounded-lg bg-ink-800 px-3 py-2 text-sm"/><button disabled={busy} onClick={()=>void onRename(item.id)} className="rounded-lg bg-lime-400 px-3 py-2 text-xs font-bold text-ink-950">Lưu</button><button onClick={()=>setEditing(null)} className="px-2 text-xs">Hủy</button></div>:<div className="flex items-center gap-3"><div className="rounded-lg bg-ink-800 p-3 text-lime-400"><Disc3 size={22}/></div><div className="min-w-0 flex-1"><p className="truncate font-semibold">{item.name}</p><p className="text-xs text-mist-300">Tạo {new Date(item.created_at).toLocaleDateString("vi-VN")}</p></div><button type="button" title="Đổi tên" aria-label={`Đổi tên ${item.name}`} onClick={()=>{setEditing(item.id);setEditName(item.name);}} className="rounded-lg p-2 hover:bg-ink-800"><PencilLine size={17}/></button><button type="button" title="Xóa" aria-label={`Xóa ${item.name}`} disabled={busy} onClick={()=>void onDelete(item.id)} className="rounded-lg p-2 text-red-300 hover:bg-red-950/30"><Trash2 size={17}/></button></div>}</li>)}</ul>
-     </section></div>}
-   {tab==="favorites" && <section className={panel}><h2 className="mb-3 flex items-center gap-2 text-xl font-bold"><Heart size={20} className="text-lime-400"/> Bài hát yêu thích</h2><p className="mb-4 text-sm text-mist-300">Lưu ID bài hát theo nguồn, không sao chép hay phát âm thanh Spotify. Nút thêm bài hát sẽ xuất hiện sau khi tích hợp danh mục nhạc thật.</p>{favorites.isLoading && <p className="text-sm">Đang tải…</p>}{favorites.isError && <p role="alert" className="text-red-300">{favorites.error.message}</p>}{favorites.data?.length===0 && <p className="rounded-xl border border-dashed border-ink-700 p-6 text-sm text-mist-300">Chưa có bài hát yêu thích.</p>}<ul className="space-y-2">{favorites.data?.map(item=><li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-ink-950 p-4"><div className="min-w-0"><p className="text-xs uppercase tracking-widest text-mist-300">{item.provider}</p><p className="truncate text-sm">ID: {item.track_id}</p></div><button type="button" disabled={busy} aria-label={`Xóa bài hát ${item.track_id} khỏi yêu thích`} onClick={()=>void mutation(()=>removeFavorite(item.id),"favorites")} className="rounded-lg p-2 text-red-300 hover:bg-ink-800"><Trash2 size={18}/></button></li>)}</ul></section>}
-   {tab==="history" && <section className={panel}><h2 className="mb-3 flex items-center gap-2 text-xl font-bold"><History size={20} className="text-lime-400"/> Lịch sử nghe</h2><p className="mb-4 text-sm text-mist-300">Chỉ ghi lịch sử khi trình phát nhạc có giấy phép được xây dựng ở Giai đoạn 3. Hiện chưa có lượt nghe nào được giả lập.</p>{history.isLoading && <p className="text-sm">Đang tải…</p>}{history.isError && <p role="alert" className="text-red-300">{history.error.message}</p>}{history.data?.length===0 && <p className="rounded-xl border border-dashed border-ink-700 p-6 text-sm text-mist-300">Chưa có lịch sử nghe.</p>}<ul className="space-y-2">{history.data?.map(item=><li key={item.id} className="rounded-xl bg-ink-950 p-4"><div className="flex justify-between gap-3"><p className="truncate text-sm">{item.provider}: {item.track_id}</p><span className="shrink-0 text-xs text-mist-300">{new Date(item.played_at).toLocaleString("vi-VN")}</span></div><p className="mt-1 text-xs text-mist-300">Thời lượng: {item.listened_seconds} giây</p></li>)}</ul></section>}
-  </div>;
+export default function Page() {
+  return (
+    <>
+      <PageHeader
+        title="Thư viện của bạn"
+        description="Playlist, bài hát yêu thích và lịch sử nghe, riêng tư theo tài khoản."
+      />
+      <AuthGate>
+        <LibraryContent />
+      </AuthGate>
+    </>
+  );
 }
-export default function Page(){return <><PageHeader title="Thư viện của bạn" description="Tạo playlist và quản lý dữ liệu âm nhạc thật, riêng tư theo tài khoản."/><AuthGate><LibraryContent/></AuthGate></>}

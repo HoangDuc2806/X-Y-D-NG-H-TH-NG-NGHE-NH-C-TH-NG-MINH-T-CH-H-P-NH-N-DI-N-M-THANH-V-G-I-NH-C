@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ExternalLink, LoaderCircle, Music2, PlayCircle, Search } from "lucide-react";
 import { ApiError, searchSpotifyTracks, type SpotifyTrack } from "@/lib/api";
 import { useSpotifyPlayer } from "@/components/spotify-player-provider";
+import { TrackActions } from "@/components/track-actions";
 
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.floor(durationMs / 1000);
@@ -99,6 +100,7 @@ export function SpotifySearch({ initialQuery }: { initialQuery: string }) {
                 </div>
                 <div className="flex items-center gap-2 border-t border-ink-700 p-3">
                   <button type="button" onClick={() => void handlePlay(track)} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-lime-400 px-3 py-2 text-sm font-semibold text-ink-950 hover:bg-lime-300"><PlayCircle size={16} />{authorized ? (isPlaying ? "Phát lại bài này" : "Phát trên website") : "Kết nối để phát"}</button>
+                  <TrackActions track={track} />
                   <a href={track.spotify_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1 rounded-lg border border-ink-600 px-3 py-2 text-sm hover:border-lime-500" aria-label={`Mở ${track.name} trên Spotify`}>Spotify <ExternalLink size={13} /></a>
                 </div>
               </article>

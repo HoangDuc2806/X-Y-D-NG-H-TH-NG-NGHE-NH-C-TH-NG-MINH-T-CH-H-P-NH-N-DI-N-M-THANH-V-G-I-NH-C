@@ -78,12 +78,15 @@ class SupabaseRestClient:
         filters: dict[str, str] | None = None,
         order: str | None = None,
         limit: int | None = None,
+        offset: int | None = None,
     ) -> list[dict[str, Any]]:
         params = {"select": select, **(filters or {})}
         if order:
             params["order"] = order
         if limit is not None:
             params["limit"] = str(limit)
+        if offset:
+            params["offset"] = str(offset)
         data = await self.request("GET", table, params=params)
         return data if isinstance(data, list) else []
 

@@ -8,6 +8,8 @@ from app.schemas import PlaylistCreate, PlaylistRead, PlaylistUpdate
 
 router = APIRouter(prefix="/api/playlists", tags=["Playlists"])
 PLAYLIST_FIELDS = "id,user_id,name,description,created_at,updated_at"
+# Chỉ danh sách mới embed số bài hát (PostgREST aggregate count).
+PLAYLIST_LIST_FIELDS = PLAYLIST_FIELDS + ",playlist_tracks(count)"
 
 
 @router.get("", response_model=list[PlaylistRead])
@@ -18,7 +20,7 @@ async def list_playlists(
 ) -> list[dict]:
     return await db.select(
         "playlists",
-        select=PLAYLIST_FIELDS,
+        select=PLAYLIST_LIST_FIELDS,
         filters={"user_id": f"eq.{context.user.id}"},
         order="created_at.desc",
         limit=limit,
@@ -45,6 +47,7 @@ async def create_playlist(
 async def update_playlist(
     playlist_id: UUID,
     payload: PlaylistUpdate,
+    context: AuthContext = Depends(get_auth_context),
     db: SupabaseRestClient = Depends(get_user_supabase),
 ) -> dict:
     changes = payload.model_dump(exclude_unset=True)
@@ -53,7 +56,7 @@ async def update_playlist(
     rows = await db.update(
         "playlists",
         changes,
-        filters={"id": f"eq.{playlist_id}"},
+        filters={"id": f"eq.{playlist_id}", "user_id": f"eq.{context.user.id}"},
         select=PLAYLIST_FIELDS,
     )
     if not rows:
@@ -64,8 +67,12 @@ async def update_playlist(
 @router.delete("/{playlist_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_playlist(
     playlist_id: UUID,
+    context: AuthContext = Depends(get_auth_context),
     db: SupabaseRestClient = Depends(get_user_supabase),
 ) -> None:
-    rows = await db.delete("playlists", filters={"id": f"eq.{playlist_id}"})
+    rows = await db.delete(
+        "playlists",
+        filters={"id": f"eq.{playlist_id}", "user_id": f"eq.{context.user.id}"},
+    )
     if not rows:
         raise HTTPException(status_code=404, detail="Không tìm thấy playlist.")

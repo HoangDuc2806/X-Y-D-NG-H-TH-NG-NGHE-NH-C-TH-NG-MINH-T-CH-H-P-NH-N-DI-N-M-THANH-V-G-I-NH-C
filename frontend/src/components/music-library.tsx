@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ApiError, searchSpotifyTracks, type SpotifyTrack } from "@/lib/api";
 import { useSpotifyPlayer } from "@/components/spotify-player-provider";
+import { TrackActions } from "@/components/track-actions";
 
 type MusicCategory = {
   id: string;
@@ -296,6 +297,7 @@ export function MusicLibrary() {
                       <PlayCircle size={16} />
                       {!authorized ? "Kết nối để phát" : isCurrentTrack ? "Phát lại bài này" : "Phát trên website"}
                     </button>
+                    <TrackActions track={track} />
                     <a
                       href={track.spotify_url}
                       target="_blank"

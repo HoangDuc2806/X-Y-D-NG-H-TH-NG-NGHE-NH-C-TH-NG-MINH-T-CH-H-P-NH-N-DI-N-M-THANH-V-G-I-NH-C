@@ -3,12 +3,57 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class TrackProvider(str, Enum):
     spotify = "spotify"
     licensed = "licensed"
+
+
+def _clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _require_https(value: str | None) -> str | None:
+    """Chỉ cho phép URL https để tránh lưu scheme nguy hiểm (javascript:, data:)."""
+    value = _clean_optional_text(value)
+    if value is not None and not value.lower().startswith("https://"):
+        raise ValueError("URL phải bắt đầu bằng https://.")
+    return value
+
+
+class TrackMetadataRead(BaseModel):
+    """Metadata hiển thị đã lưu. Đọc lỏng để một dòng lạ không làm hỏng cả danh sách."""
+
+    track_name: str | None = None
+    artist_name: str | None = None
+    album_name: str | None = None
+    cover_url: str | None = None
+    spotify_url: str | None = None
+
+
+class TrackMetadata(BaseModel):
+    """Metadata hiển thị do client gửi lên (ảnh bìa, tên, nghệ sĩ). Không chứa âm thanh."""
+
+    track_name: str | None = Field(default=None, max_length=200)
+    artist_name: str | None = Field(default=None, max_length=500)
+    album_name: str | None = Field(default=None, max_length=200)
+    cover_url: str | None = Field(default=None, max_length=2048)
+    spotify_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("track_name", "artist_name", "album_name")
+    @classmethod
+    def _trim_text(cls, value: str | None) -> str | None:
+        return _clean_optional_text(value)
+
+    @field_validator("cover_url", "spotify_url")
+    @classmethod
+    def _https_urls(cls, value: str | None) -> str | None:
+        return _require_https(value)
 
 
 class ProfileRead(BaseModel):
@@ -34,7 +79,7 @@ class ProfileUpdate(BaseModel):
         return value
 
 
-class FavoriteRead(BaseModel):
+class FavoriteRead(TrackMetadataRead):
     model_config = ConfigDict(extra="ignore")
 
     id: UUID
@@ -44,7 +89,7 @@ class FavoriteRead(BaseModel):
     created_at: datetime
 
 
-class FavoriteCreate(BaseModel):
+class FavoriteCreate(TrackMetadata):
     model_config = ConfigDict(extra="forbid")
 
     provider: TrackProvider
@@ -68,6 +113,19 @@ class PlaylistRead(BaseModel):
     description: str
     created_at: datetime
     updated_at: datetime
+    # Số bài hát, lấy từ embed `playlist_tracks(count)` của PostgREST (chỉ có ở danh sách).
+    track_count: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_track_count(cls, data):
+        if isinstance(data, dict) and "track_count" not in data:
+            embedded = data.get("playlist_tracks")
+            if isinstance(embedded, list) and embedded and isinstance(embedded[0], dict):
+                count = embedded[0].get("count")
+                if isinstance(count, int):
+                    data = {**data, "track_count": count}
+        return data
 
 
 class PlaylistCreate(BaseModel):
@@ -123,15 +181,10 @@ class PlaylistTrackRead(BaseModel):
     created_at: datetime | None = None
 
 
-class PlaylistTrackCreate(BaseModel):
+class PlaylistTrackCreate(TrackMetadata):
     model_config = ConfigDict(extra="forbid")
 
     track_id: str = Field(min_length=1, max_length=200)
-    track_name: str | None = Field(default=None, max_length=200)
-    artist_name: str | None = Field(default=None, max_length=200)
-    album_name: str | None = Field(default=None, max_length=200)
-    cover_url: str | None = Field(default=None, max_length=2048)
-    spotify_url: str | None = Field(default=None, max_length=2048)
     position: int = Field(default=0, ge=0)
 
     @field_validator("track_id")
@@ -183,7 +236,7 @@ class PlaylistItemUpdate(BaseModel):
     position: int = Field(ge=0)
 
 
-class ListeningHistoryRead(BaseModel):
+class ListeningHistoryRead(TrackMetadataRead):
     model_config = ConfigDict(extra="ignore")
 
     id: UUID
@@ -194,7 +247,7 @@ class ListeningHistoryRead(BaseModel):
     played_at: datetime
 
 
-class ListeningHistoryCreate(BaseModel):
+class ListeningHistoryCreate(TrackMetadata):
     model_config = ConfigDict(extra="forbid")
 
     provider: TrackProvider
