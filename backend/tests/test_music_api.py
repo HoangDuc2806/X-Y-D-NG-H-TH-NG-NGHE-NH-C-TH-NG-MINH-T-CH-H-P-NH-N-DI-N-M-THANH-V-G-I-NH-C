@@ -115,7 +115,33 @@ def test_favorite_create_uses_authenticated_user_id():
     insert = calls[0]
     assert insert[2]["user_id"] == str(USER_ID)
     assert "id" not in insert[2]
+    assert insert[4] == "resolution=ignore-duplicates,return=representation"
     assert insert[5] == {"on_conflict": "user_id,provider,track_id"}
+
+
+def test_duplicate_favorite_returns_existing_row_without_update_policy():
+    calls = []
+    existing = {
+        "id": str(ROW_ID),
+        "user_id": str(USER_ID),
+        "provider": "spotify",
+        "track_id": "track-duplicate",
+        "created_at": NOW.isoformat(),
+    }
+    fake = FakeSupabase(calls, {
+        ("insert", "favorites"): [],
+        ("select", "favorites"): [existing],
+    })
+    client = TestClient(make_app(fake))
+    response = client.post("/api/favorites", json={"provider": "spotify", "track_id": "track-duplicate"})
+    assert response.status_code == 201
+    assert response.json()["id"] == str(ROW_ID)
+    assert [call[0] for call in calls] == ["insert", "select"]
+    assert calls[1][3] == {
+        "user_id": f"eq.{USER_ID}",
+        "provider": "eq.spotify",
+        "track_id": "eq.track-duplicate",
+    }
 
 
 def test_playlist_create_never_accepts_client_user_id():

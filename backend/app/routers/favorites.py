@@ -31,16 +31,32 @@ async def add_favorite(
     context: AuthContext = Depends(get_auth_context),
     db: SupabaseRestClient = Depends(get_user_supabase),
 ) -> dict:
+    favorite_payload = {"user_id": str(context.user.id), **payload.model_dump(mode="json")}
     rows = await db.insert(
         "favorites",
-        {"user_id": str(context.user.id), **payload.model_dump(mode="json")},
+        favorite_payload,
         select=FAVORITE_FIELDS,
         params={"on_conflict": "user_id,provider,track_id"},
-        prefer="resolution=merge-duplicates,return=representation",
+        # DO NOTHING avoids requiring a broad UPDATE RLS policy just to handle duplicates.
+        prefer="resolution=ignore-duplicates,return=representation",
     )
-    if not rows:
-        raise HTTPException(status_code=503, detail="Không nhận được dữ liệu yêu thích từ Supabase.")
-    return rows[0]
+    if rows:
+        return rows[0]
+
+    # A duplicate may produce an empty representation. Return the existing row instead.
+    existing = await db.select(
+        "favorites",
+        select=FAVORITE_FIELDS,
+        filters={
+            "user_id": f"eq.{context.user.id}",
+            "provider": f"eq.{payload.provider.value}",
+            "track_id": f"eq.{payload.track_id}",
+        },
+        limit=1,
+    )
+    if existing:
+        return existing[0]
+    raise HTTPException(status_code=503, detail="Không nhận được dữ liệu yêu thích từ Supabase.")
 
 
 @router.delete("/{favorite_id}", status_code=status.HTTP_204_NO_CONTENT)

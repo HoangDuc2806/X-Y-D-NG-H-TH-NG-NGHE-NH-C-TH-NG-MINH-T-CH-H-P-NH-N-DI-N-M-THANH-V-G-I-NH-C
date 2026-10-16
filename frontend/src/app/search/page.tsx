@@ -1,10 +1,15 @@
-import { PageHeader, EmptyState } from "@/components/page-header";
+import { PageHeader } from "@/components/page-header";
+import { SpotifySearch } from "@/components/spotify-search";
 
-export default function Page() {
+type SearchPageProps = { searchParams?: { q?: string | string[] } };
+
+export default function Page({ searchParams }: SearchPageProps) {
+  const rawQuery = searchParams?.q;
+  const initialQuery = Array.isArray(rawQuery) ? rawQuery[0] ?? "" : rawQuery ?? "";
   return (
     <>
-      <PageHeader title="Tìm kiếm" description="Kết quả Spotify và kho nhạc được cấp phép được hiển thị riêng." />
-      <EmptyState title="Chưa có kết quả" hint="Nhập từ khóa vào ô tìm kiếm phía trên. Tích hợp ở Giai đoạn 3–4." />
+      <PageHeader title="Tìm kiếm Spotify" description="Tìm bài hát, nghệ sĩ và album trong danh mục Spotify; nghe bằng trình phát nhúng hoặc mở Spotify." />
+      <SpotifySearch initialQuery={initialQuery} />
     </>
   );
 }
