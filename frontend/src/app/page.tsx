@@ -1,12 +1,18 @@
-import { PageHeader, EmptyState } from "@/components/page-header";
+import { PageHeader } from "@/components/page-header";
 import { BackendStatus } from "@/components/backend-status";
+import { MusicLibrary } from "@/components/music-library";
 
 export default function HomePage() {
   return (
     <>
-      <PageHeader title="Xin chào" description="Nghe nhạc trong kho nhạc được cấp phép, nhận diện bài hát và mở bản gốc trên Spotify." />
-      <div className="mb-8"><BackendStatus /></div>
-      <EmptyState title="Chưa có bài hát nào trong kho nhạc" hint="Kho nhạc được cấp phép sẽ xuất hiện ở đây sau Giai đoạn 3." />
+      <PageHeader
+        title="Kho nhạc"
+        description="Khám phá bài hát trong danh mục Spotify tại Việt Nam, phát nhạc bằng tài khoản Spotify Premium hoặc mở bản gốc trên Spotify."
+      />
+      <div className="mb-6">
+        <BackendStatus />
+      </div>
+      <MusicLibrary />
     </>
   );
 }
